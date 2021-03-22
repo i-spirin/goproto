@@ -6,24 +6,19 @@ import (
 )
 
 type UDPProto struct {
-	connection       *net.UDPConn
-	ConnectionMade   func(*net.UDPConn)
-	DatagramReceived func(*net.UDPAddr, []byte)
-	ErrorReceived    func(error)
-	ConnectionLost   func(error)
+	connection     *net.UDPConn
+	CustomUDPProto CustomUDPProto
 }
 
-func New(
-	ConnectionMade func(*net.UDPConn),
-	DatagramReceived func(*net.UDPAddr, []byte),
-	ErrorReceived func(error),
-	ConnectionLost func(error)) *UDPProto {
-	return &UDPProto{
-		ConnectionMade:   ConnectionMade,
-		DatagramReceived: DatagramReceived,
-		ErrorReceived:    ErrorReceived,
-		ConnectionLost:   ConnectionLost,
-	}
+type CustomUDPProto interface {
+	ConnectionMade(*net.UDPConn)
+	DatagramReceived(*net.UDPAddr, []byte)
+	ErrorReceived(error)
+	ConnectionLost(error)
+}
+
+func New(c CustomUDPProto) *UDPProto {
+	return &UDPProto{CustomUDPProto: c}
 }
 
 func (u *UDPProto) Write(p []byte, addr *net.UDPAddr) (n int, err error) {
@@ -41,7 +36,7 @@ func (u *UDPProto) Start(network string, host string, port int) error {
 		return fmt.Errorf("error binding a port: %v", err)
 	}
 
-	go u.ConnectionMade(u.connection)
+	go u.CustomUDPProto.ConnectionMade(u.connection)
 	return nil
 }
 
@@ -50,11 +45,11 @@ func (u *UDPProto) Serve() {
 
 	for {
 		n, addr, _ := u.connection.ReadFromUDP(buffer)
-		go u.DatagramReceived(addr, buffer[0:n-1])
+		go u.CustomUDPProto.DatagramReceived(addr, buffer[0:n-1])
 	}
 
 }
 
 func (u *UDPProto) Close(e error) {
-	u.ConnectionLost(e)
+	u.CustomUDPProto.ConnectionLost(e)
 }
